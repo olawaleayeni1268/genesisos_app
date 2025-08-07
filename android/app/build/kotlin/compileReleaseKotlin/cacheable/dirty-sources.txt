@@ -1,0 +1,2 @@
+C:\Users\User\genesisos_app\android\app\src\main\kotlin\com\example\genesisos_app\MainActivity.kt
+C:\Users\User\genesisos_app\android\app\src\main\kotlin\com\example\temp_fix\MainActivity.kt

@@ -1,0 +1,2 @@
+-keep class android.app.Application { <init>(); }
+-keep class com.example.temp_fix.MainActivity { <init>(); }
