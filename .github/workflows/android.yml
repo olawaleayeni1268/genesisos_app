@@ -1,24 +1,34 @@
 name: Android APK
 
 on:
-  push:                 # build every push
-  workflow_dispatch:    # or manual trigger
+  push:               # build on each push
+  workflow_dispatch:  # allow manual trigger
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Check out your repository
       - uses: actions/checkout@v4
 
+      # 2. Install the Flutter SDK (stable channel)
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
 
+      # 3. Expose FLUTTER_HOME for the Flutter plugin-loader
+      - name: Export FLUTTER_HOME
+        run: echo "FLUTTER_HOME=$FLUTTER_ROOT" >> "$GITHUB_ENV"
+
+      # 4. Get Dart/Flutter packages
       - run: flutter pub get
+
+      # 5. Build the release APK
       - run: flutter build apk --release
 
+      # 6. Upload the APK as a workflow artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
