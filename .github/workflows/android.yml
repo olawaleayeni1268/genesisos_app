@@ -7,14 +7,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    env:
+      FLUTTER_HOME: /opt/hostedtoolcache/flutter/stable-x64
     steps:
-      # 1. Check out your repository
-      - uses: actions/checkout@v4
-
-      # 2. Install the Flutter SDK (stable channel)
-      - name: Install Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v3
+      - uses: subosito/flutter-action@v2
         with:
           channel: stable
 
