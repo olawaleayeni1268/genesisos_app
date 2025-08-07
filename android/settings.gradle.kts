@@ -1,7 +1,9 @@
 // android/settings.gradle.kts  – full content
 pluginManagement {
     // make Flutter’s own plugin visible
-    includeBuild("C:/src/flutter/packages/flutter_tools/gradle")
+    // Use the Flutter SDK path provided by the action
+val flutterHome = System.getenv("FLUTTER_HOME") ?: error("FLUTTER_HOME not set")
+includeBuild("$flutterHome/packages/flutter_tools/gradle")
 
     repositories {
         google()
