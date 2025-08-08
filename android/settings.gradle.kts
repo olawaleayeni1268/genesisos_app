@@ -1,42 +1,30 @@
-// android/settings.gradle.kts
-
 pluginManagement {
-    // Find the Flutter SDK: prefer CI env var, otherwise read local.properties
-    val flutterHome: String by lazy {
-        System.getenv("FLUTTER_HOME") ?: run {
-            val props = java.util.Properties()
-            val f = java.io.File(rootDir, "local.properties")
-            if (f.exists()) {
-                f.inputStream().use { props.load(it) }
-                props.getProperty("flutter.sdk")
-            } else null
-        } ?: error("Flutter SDK not found. Set FLUTTER_HOME in CI or flutter.sdk in local.properties.")
-    }
-
-    // Expose Flutter's Gradle plugins (dev.flutter.flutter-gradle-plugin)
-    includeBuild("$flutterHome/packages/flutter_tools/gradle")
-
     repositories {
+        gradlePluginPortal()
         google()
         mavenCentral()
-        gradlePluginPortal()
-        // Flutter artifacts
-        maven(url = "https://storage.googleapis.com/download.flutter.io")
     }
-}
 
-// Required for the Flutter plugin to be applied later
-plugins {
-    id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+    // Make Flutter’s Gradle plugin visible from the installed Flutter SDK on CI
+    val flutterHome = System.getenv("FLUTTER_HOME")
+    if (!flutterHome.isNullOrEmpty()) {
+        includeBuild("$flutterHome/packages/flutter_tools/gradle")
+    }
+
+    // Pin plugin versions here (projects can omit versions)
+    plugins {
+        id("com.android.application") version "8.7.3"
+        id("org.jetbrains.kotlin.android") version "1.9.22"
+        id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+    }
 }
 
 dependencyResolutionManagement {
-    // The Flutter plugin may add a project-level repo; allow it.
-    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+    // Don't hard-fail if a plugin (Flutter) adds a project repo
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         google()
         mavenCentral()
-        maven(url = "https://storage.googleapis.com/download.flutter.io")
     }
 }
 
