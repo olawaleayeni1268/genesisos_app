@@ -1,30 +1,21 @@
 pluginManagement {
     repositories {
-        gradlePluginPortal()
         google()
         mavenCentral()
-    }
-
-    // Make Flutter’s Gradle plugin visible from the installed Flutter SDK on CI
-    val flutterHome = System.getenv("FLUTTER_HOME")
-    if (!flutterHome.isNullOrEmpty()) {
-        includeBuild("$flutterHome/packages/flutter_tools/gradle")
-    }
-
-    // Pin plugin versions here (projects can omit versions)
-    plugins {
-        id("com.android.application") version "8.7.3"
-        id("org.jetbrains.kotlin.android") version "1.9.22"
-        id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+        gradlePluginPortal()
+        // Flutter engine / artifacts (needed for io.flutter:* deps)
+        maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
     }
 }
 
 dependencyResolutionManagement {
-    // Don't hard-fail if a plugin (Flutter) adds a project repo
-    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    // Keep this strict so only the repos above are used
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
+        // Same Flutter repo for runtime dependencies
+        maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
     }
 }
 
