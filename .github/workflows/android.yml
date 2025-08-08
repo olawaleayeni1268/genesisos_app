@@ -9,14 +9,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # Pin the Flutter SDK location so settings.gradle.kts can include the Flutter Gradle plugin
-      FLUTTER_HOME: /opt/hostedtoolcache/flutter/3.32.8-stable/x64
-
-      # Mirrors help in regions with slow access to Google/Maven Central (safe to keep)
+      # Mirrors help if network is flaky; safe to keep
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
       PUB_HOSTED_URL: https://pub.flutter-io.cn
-
-      # Slightly higher timeouts for flaky networks
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8 -Dorg.gradle.internal.http.socketTimeout=120000 -Dorg.gradle.internal.http.connectionTimeout=120000"
 
     steps:
@@ -36,8 +31,14 @@ jobs:
           flutter-version: '3.32.8'
           cache: true
 
-      - name: Flutter doctor
+      # <<< NEW: auto-detect the Flutter SDK root and export FLUTTER_HOME >>>
+      - name: Discover FLUTTER_HOME
+        run: echo "FLUTTER_HOME=$(dirname $(dirname $(which flutter)))" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Print Flutter info
         run: |
+          echo "FLUTTER_HOME=$FLUTTER_HOME"
           flutter --version
           flutter doctor -v
 
