@@ -1,22 +1,20 @@
-// android/settings.gradle.kts
-
 pluginManagement {
     repositories {
         google()
         gradlePluginPortal()
         mavenCentral()
+        // Flutter artifacts
+        maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
     }
 }
 
-import org.gradle.api.initialization.resolve.RepositoriesMode
-
 dependencyResolutionManagement {
-    // Prefer settings-defined repos, but DO NOT fail if a plugin adds one.
-    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    // Allow project-level repositories (the Flutter plugin adds one)
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
     repositories {
         google()
         mavenCentral()
-        // Needed by the Flutter Gradle plugin for engine artifacts
+        // Also list Flutter artifacts here just in case
         maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
     }
 }
