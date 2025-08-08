@@ -6,25 +6,18 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
     }
-
-    // Require FLUTTER_HOME to be set by CI (workflow will export it)
-    val flutterHome = System.getenv("FLUTTER_HOME")
-        ?: throw GradleException(
-            "FLUTTER_HOME is not set. CI must export it after installing Flutter."
-        )
-
-    val flutterTools = java.io.File("$flutterHome/packages/flutter_tools/gradle")
-    if (!flutterTools.exists()) {
-        throw GradleException("Flutter tools not found at: $flutterTools")
-    }
-    includeBuild(flutterTools)
 }
 
+import org.gradle.api.initialization.resolve.RepositoriesMode
+
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    // Prefer settings-defined repos, but DO NOT fail if a plugin adds one.
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         google()
         mavenCentral()
+        // Needed by the Flutter Gradle plugin for engine artifacts
+        maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
     }
 }
 
