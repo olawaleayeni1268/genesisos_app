@@ -9,9 +9,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # Help with slow networks (safe mirrors)
+      # Pin the Flutter SDK location so settings.gradle.kts can include the Flutter Gradle plugin
+      FLUTTER_HOME: /opt/hostedtoolcache/flutter/3.32.8-stable/x64
+
+      # Mirrors help in regions with slow access to Google/Maven Central (safe to keep)
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
       PUB_HOSTED_URL: https://pub.flutter-io.cn
+
+      # Slightly higher timeouts for flaky networks
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8 -Dorg.gradle.internal.http.socketTimeout=120000 -Dorg.gradle.internal.http.connectionTimeout=120000"
 
     steps:
@@ -24,10 +29,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Flutter (stable 3.32.8)
+      - name: Set up Flutter 3.32.8
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           flutter-version: '3.32.8'
           cache: true
 
