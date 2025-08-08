@@ -2,12 +2,17 @@ pluginManagement {
     repositories {
         google()
         gradlePluginPortal()
+        mavenCentral()
     }
 }
 
-plugins {
-    id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
 }
 
-include(":app")
 rootProject.name = "genesisos_app"
+include(":app")
