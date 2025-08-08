@@ -1,19 +1,19 @@
 plugins {
-    // Pin explicit versions so CI can resolve them
-    id("com.android.application") version "8.7.3"
-    id("org.jetbrains.kotlin.android") version "1.9.22"
+    // No versions here — let Flutter/Gradle resolve them
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
 
-    // The Flutter Gradle Plugin must be applied after the Android/Kotlin plugins
+    // Must be applied after the Android/Kotlin plugins
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
     namespace = "com.example.genesisos_app"
 
-    // Use versions provided by the Flutter plugin for SDK levels
+    // Provided by the Flutter Gradle plugin
     compileSdk = flutter.compileSdkVersion
 
-    // Force the NDK version your plugins require
+    // Pin the NDK version you need
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -36,7 +36,7 @@ android {
 
     buildTypes {
         release {
-            // Keep debug signing for now so CI can build a release APK without a keystore
+            // Keep debug signing so CI can produce a release APK without a keystore
             signingConfig = signingConfigs.getByName("debug")
         }
     }
