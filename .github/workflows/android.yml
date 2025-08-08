@@ -9,38 +9,43 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # Mirrors help if network is flaky; safe to keep
       FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
       PUB_HOSTED_URL: https://pub.flutter-io.cn
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8 -Dorg.gradle.internal.http.socketTimeout=120000 -Dorg.gradle.internal.http.connectionTimeout=120000"
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
-      - name: Set up Flutter 3.32.8
+      - name: Set up Flutter (stable 3.32.8)
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.32.8'
+          flutter-version: "3.32.8"
           cache: true
 
-      # <<< NEW: auto-detect the Flutter SDK root and export FLUTTER_HOME >>>
-      - name: Discover FLUTTER_HOME
-        run: echo "FLUTTER_HOME=$(dirname $(dirname $(which flutter)))" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Print Flutter info
+      - name: Show Flutter env
         run: |
+          echo "FLUTTER_HOME=$(dirname $(dirname $(which flutter)))" >> $GITHUB_ENV
           echo "FLUTTER_HOME=$FLUTTER_HOME"
           flutter --version
           flutter doctor -v
+
+      # 🔥 Key step: regenerate android/ fresh on the runner
+      - name: Re-create android directory for this build
+        run: |
+          rm -rf android
+          flutter create --platforms=android --org com.example .
+          # Ensure SDK path is set for Gradle on runner
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          # Optionally force NDK version if your plugins need it
+          echo "android { ndkVersion = \"27.0.12077973\" }" >> android/app/build.gradle.kts
 
       - name: Install dependencies
         run: flutter pub get
@@ -48,7 +53,7 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
