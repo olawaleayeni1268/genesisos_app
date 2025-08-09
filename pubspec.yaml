@@ -1,39 +1,34 @@
 name: genesisos_app
-description: "A new Flutter project."
+description: GenesisOS Flutter app (Supabase + dotenv)
+publish_to: "none"
 
-# Prevent accidental publishing to pub.dev
-publish_to: 'none'
-
-# Version + build number
-version: 1.0.0+1
+# App version: 1.0.4 (build 4). You can bump this later.
+version: 1.0.4+4
 
 environment:
-  sdk: ^3.8.1
+  sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # iOS-style icons
+  # UI
   cupertino_icons: ^1.0.8
 
-  # Core packages
-  supabase_flutter: ^2.3.4
-  flutter_dotenv: ^5.0.2
+  # Supabase client for Flutter
+  supabase_flutter: ^2.5.6
 
-  # Sprint-1 additions
-  google_fonts: ^6.1.0       # custom fonts
-  flutter_markdown: ^0.6.17  # markdown preview
-  animations: ^2.0.8         # fade / slide helpers
+  # Load .env file bundled as an asset
+  flutter_dotenv: ^5.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
 
+  # Bundle your environment file so the app can read it at runtime
   assets:
     - .env
-

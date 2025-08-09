@@ -1,28 +1,23 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // must come after the Android/Kotlin plugins
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
     namespace = "com.example.genesisos_app"
-
-    // Use the values exported by the Flutter plugin
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.genesisos_app"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        minSdk = 21
+        targetSdk = 34
+
+        // Bump these so the new APK installs
+        versionCode = 5
+        versionName = "1.0.5"
     }
 
-    // Your NDK pin
-    ndkVersion = "27.0.12077973"
-
-    // AGP 8.x needs Java 17
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -32,10 +27,11 @@ android {
     }
 
     buildTypes {
-        release {
-            // Keep debug signing for now so CI can produce a release APK
+        getByName("release") {
+            // Sign with debug keys so you can install the release APK easily while testing
             signingConfig = signingConfigs.getByName("debug")
         }
+        getByName("debug") { }
     }
 }
 
@@ -43,10 +39,6 @@ flutter {
     source = "../.."
 }
 
-// ********************************************************************
-// Explicitly add the Flutter Android embedding so Kotlin sees FlutterActivity
-// ********************************************************************
-val engineRev = "ef0cd000916d64fa0c5d09cc809fa7ad244a5767"
 dependencies {
-    implementation("io.flutter:flutter_embedding_release:1.0.0-$engineRev")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.22")
 }
