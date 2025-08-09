@@ -13,9 +13,9 @@ android {
         minSdk = 21
         targetSdk = 34
 
-        // <-- BUMPED FOR NEW INSTALL -->
-        versionCode = 11
-        versionName = "1.0.11"
+        // BUMPED so the new APK installs
+        versionCode = 14
+        versionName = "1.0.14"
     }
 
     compileOptions {
@@ -28,7 +28,7 @@ android {
 
     buildTypes {
         getByName("release") {
-            // Use debug signing so the release APK installs easily during testing
+            // Use debug signing for easy install while testing
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
         }

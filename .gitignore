@@ -1,31 +1,92 @@
-# ---- Flutter / Dart
+# ---------------------------
+# Flutter / Dart
+# ---------------------------
 .dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
 .flutter-plugins
 .flutter-plugins-dependencies
-.packages
 
-# ---- Build outputs (root and any module)
-build/
-**/build/
+# Keep Flutter metadata (useful in repo)
+# !.metadata
 
-# ---- Android local + caches (avoid Windows paths leaking into CI)
-android/local.properties
-android/.gradle/
-**/.gradle/
-
-# ---- IDE noise
+# ---------------------------
+# IDE / Editor
+# ---------------------------
 .idea/
+.vscode/
 *.iml
 
-# ---- iOS/macOS (safe to ignore even if you don’t use them yet)
+# ---------------------------
+# OS files
+# ---------------------------
+.DS_Store
+Thumbs.db
+
+# ---------------------------
+# Android
+# ---------------------------
+android/.gradle/
+android/local.properties
+android/captures/
+android/**/GeneratedPluginRegistrant.*
+# Keystores (do NOT commit real signing keys)
+*.keystore
+*.jks
+
+# ---------------------------
+# iOS
+# ---------------------------
 ios/Pods/
 ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/App.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+**/xcuserdata/
+**/*.xcuserstate
+
+# ---------------------------
+# macOS
+# ---------------------------
 macos/Pods/
 macos/.symlinks/
+macos/Flutter/ephemeral/
+macos/Flutter/GeneratedPluginRegistrant.swift
 
-# ---- Windows/Linux desktop ephemeral
+# ---------------------------
+# Windows
+# ---------------------------
 windows/flutter/ephemeral/
+
+# ---------------------------
+# Linux
+# ---------------------------
 linux/flutter/ephemeral/
 
-# ---- Misc
-*.log
+# ---------------------------
+# Web
+# ---------------------------
+# (build/ is already ignored above)
+
+# ---------------------------
+# Fastlane (if used)
+# ---------------------------
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+
+# ---------------------------
+# Certificates / secrets
+# ---------------------------
+*.p12
+
+# ---------------------------
+# ENV
+# ---------------------------
+# DO NOT ignore .env in this repo (needed for CI + app asset)
+# .env
