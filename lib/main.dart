@@ -5,33 +5,68 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
+/// Remove every kind of whitespace (spaces, tabs, newlines, NBSP, zero-width)
+String sanitizeUrl(String input) {
+  final s = (input)
+      .replaceAll(RegExp(r'[\s\u00A0\u200B\u200C\u200D\uFEFF]'), '')
+      .trim();
+  if (s.isEmpty) return s;
+  if (!s.startsWith('http')) return 'https://$s';
+  return s;
+}
+
+/// Load config from --dart-define, then .env, with strict validation + fallback.
+Future<Map<String, String>> loadSupabaseConfig() async {
+  await dotenv.load(fileName: '.env', isOptional: true);
+
+  var url = const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+  var key = const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+
+  if (url.isEmpty) url = dotenv.env['SUPABASE_URL'] ?? '';
+  if (key.isEmpty) key = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+
+  url = sanitizeUrl(url);
+  key = key.trim();
+
+  // Fallback (prevents a bricked app if .env is malformed)
+  if (url.isEmpty || key.isEmpty) {
+    url = sanitizeUrl('https://pmxriyrzlkscisvgcjow.supabase.co');
+    key =
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBteHJpeXJ6bGtzY2lzdmdjam93Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM3MjQ0OTcsImV4cCI6MjA2OTMwMDQ5N30.qfNPGiFJQN-wi5oKVYzMjEdFbrDcD7RRP0-_merMuFM';
+  }
+
+  final uri = Uri.tryParse(url);
+  final good = uri != null &&
+      uri.scheme == 'https' &&
+      uri.host.isNotEmpty &&
+      uri.host.endsWith('.supabase.co');
+
+  if (!good) {
+    throw Exception('Bad SUPABASE_URL after sanitize: "$url"');
+  }
+
+  assert(() {
+    final codes = url.codeUnits.map((c) => '0x${c.toRadixString(16)}').join(' ');
+    debugPrint('Supabase URL -> $url ($codes)');
+    return true;
+  }());
+
+  return {'url': url, 'key': key};
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load .env and sanitize values (removes hidden spaces/newlines)
-  await dotenv.load(fileName: '.env');
-  final rawUrl = dotenv.env['SUPABASE_URL'] ?? '';
-  final url = rawUrl.replaceAll(RegExp(r'\s'), ''); // remove ALL whitespace
-  final anonKey = (dotenv.env['SUPABASE_ANON_KEY'] ?? '').trim();
+  final cfg = await loadSupabaseConfig();
+  await Supabase.initialize(url: cfg['url']!, anonKey: cfg['key']!);
 
-  if (!url.startsWith('https://') || !url.contains('.supabase.co')) {
-    throw Exception('Invalid SUPABASE_URL after sanitize: "$url" (raw: "$rawUrl")');
-  }
-  if (anonKey.isEmpty) {
-    throw Exception('Missing SUPABASE_ANON_KEY');
-  }
-
-  // Supabase persists session automatically
-  await Supabase.initialize(url: url, anonKey: anonKey);
-
-  // Load saved theme
   final prefs = await SharedPreferences.getInstance();
   final dark = prefs.getBool('darkMode') ?? false;
 
   runApp(GenesisApp(initialDarkMode: dark));
 }
 
-/* ----------------------------- APP & THEME ----------------------------- */
+/* ============================= APP & THEME ============================= */
 
 class GenesisApp extends StatefulWidget {
   final bool initialDarkMode;
@@ -67,7 +102,7 @@ class _GenesisAppState extends State<GenesisApp> {
   }
 }
 
-/* ------------------------------ AUTH GATE ------------------------------ */
+/* ============================== AUTH GATE ============================== */
 
 class AuthGate extends StatefulWidget {
   final VoidCallback onToggleTheme;
@@ -94,7 +129,7 @@ class _AuthGateState extends State<AuthGate> {
   }
 }
 
-/* ------------------------------ AUTH SCREENS ------------------------------ */
+/* ============================== AUTH SCREENS ============================== */
 
 class AuthScreen extends StatefulWidget {
   final VoidCallback onToggleTheme;
@@ -174,22 +209,11 @@ class _SignInViewState extends State<_SignInView> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(children: [
-        TextField(
-          controller: _email,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(labelText: 'Email'),
-        ),
+        TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email')),
         const SizedBox(height: 12),
-        TextField(
-          controller: _password,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: 'Password'),
-        ),
+        TextField(controller: _password, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
         const SizedBox(height: 20),
-        FilledButton(
-          onPressed: _loading ? null : _signIn,
-          child: _loading ? const CircularProgressIndicator() : const Text('Sign in'),
-        ),
+        FilledButton(onPressed: _loading ? null : _signIn, child: _loading ? const CircularProgressIndicator() : const Text('Sign in')),
       ]),
     );
   }
@@ -234,22 +258,11 @@ class _SignUpViewState extends State<_SignUpView> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(children: [
-        TextField(
-          controller: _email,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(labelText: 'Email'),
-        ),
+        TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email')),
         const SizedBox(height: 12),
-        TextField(
-          controller: _password,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: 'Password'),
-        ),
+        TextField(controller: _password, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
         const SizedBox(height: 20),
-        FilledButton(
-          onPressed: _loading ? null : _signUp,
-          child: _loading ? const CircularProgressIndicator() : const Text('Create account'),
-        ),
+        FilledButton(onPressed: _loading ? null : _signUp, child: _loading ? const CircularProgressIndicator() : const Text('Create account')),
       ]),
     );
   }
@@ -286,30 +299,22 @@ class _ForgotPasswordViewState extends State<_ForgotPasswordView> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(children: [
-        TextField(
-          controller: _email,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(labelText: 'Email'),
-        ),
+        TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email')),
         const SizedBox(height: 16),
-        FilledButton(
-          onPressed: _sending ? null : _sendReset,
-          child: _sending ? const CircularProgressIndicator() : const Text('Send reset email'),
-        ),
+        FilledButton(onPressed: _sending ? null : _sendReset, child: _sending ? const CircularProgressIndicator() : const Text('Send reset email')),
         const SizedBox(height: 16),
-        const Text('Note: In-app reset via deep link can be added later.'),
+        const Text('Note: In-app reset (deep link) can be added later.'),
       ]),
     );
   }
 }
 
-/* -------------------------------- APP SHELL -------------------------------- */
+/* ============================== APP SHELL ============================== */
 
 class AppShell extends StatefulWidget {
   final VoidCallback onToggleTheme;
   final bool dark;
   const AppShell({super.key, required this.onToggleTheme, required this.dark});
-
   @override
   State<AppShell> createState() => _AppShellState();
 }
@@ -319,13 +324,8 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      ScrollsPage(onToggleTheme: widget.onToggleTheme, dark: widget.dark),
-      const LinksPage(),
-      const AccountPage(),
-    ];
+    final pages = [ScrollsPage(onToggleTheme: widget.onToggleTheme, dark: widget.dark), const LinksPage(), const AccountPage()];
     final titles = ['Scrolls', 'Links', 'Account'];
-
     return Scaffold(
       appBar: AppBar(
         title: Text('GenesisOS — ${titles[_index]}'),
@@ -351,7 +351,7 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-/* ------------------------------- SCROLLS PAGE ------------------------------ */
+/* ============================== SCROLLS PAGE ============================== */
 
 enum ScrollSort { dateDesc, titleAsc, favoritesFirst }
 
@@ -359,7 +359,6 @@ class ScrollsPage extends StatefulWidget {
   final VoidCallback onToggleTheme;
   final bool dark;
   const ScrollsPage({super.key, required this.onToggleTheme, required this.dark});
-
   @override
   State<ScrollsPage> createState() => _ScrollsPageState();
 }
@@ -369,6 +368,9 @@ class _ScrollsPageState extends State<ScrollsPage> {
   final _content = TextEditingController();
   bool _saving = false;
   ScrollSort _sort = ScrollSort.dateDesc;
+
+  /// IDs hidden locally to avoid Dismissible assert until the realtime stream updates.
+  final Set<String> _locallyHidden = <String>{};
 
   @override void dispose() { _title.dispose(); _content.dispose(); super.dispose(); }
 
@@ -425,17 +427,25 @@ class _ScrollsPageState extends State<ScrollsPage> {
     }
   }
 
-  Future<void> _deleteWithUndo(Map<String, dynamic> row) async {
+  /// Use confirmDismiss + local hide to prevent "dismissed widget still in tree"
+  Future<bool> _confirmDelete(Map<String, dynamic> row) async {
     final id = row['id'] as String;
+
+    // Optimistically hide locally so the next build doesn't include it.
+    setState(() => _locallyHidden.add(id));
+
     try {
       await Supabase.instance.client.from('scrolls').delete().eq('id', id);
-      if (!mounted) return;
+
+      if (!mounted) return true;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Deleted'),
           action: SnackBarAction(
             label: 'UNDO',
             onPressed: () async {
+              // Unhide locally and reinsert
+              setState(() => _locallyHidden.remove(id));
               final data = {
                 'id': row['id'],
                 'user_id': row['user_id'],
@@ -455,9 +465,15 @@ class _ScrollsPageState extends State<ScrollsPage> {
           duration: const Duration(seconds: 5),
         ),
       );
+
+      return true; // proceed with dismiss animation
     } on PostgrestException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete error: ${e.message}')));
+      // If delete failed, unhide and cancel dismiss
+      setState(() => _locallyHidden.remove(id));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete error: ${e.message}')));
+      }
+      return false;
     }
   }
 
@@ -507,7 +523,10 @@ class _ScrollsPageState extends State<ScrollsPage> {
               builder: (context, snap) {
                 if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-                final rows = snap.data!;
+                // Filter out any rows we locally hid (optimistic remove)
+                final rows = snap.data!
+                    .where((r) => !_locallyHidden.contains(r['id'] as String))
+                    .toList();
                 if (rows.isEmpty) return const Center(child: Text('No scrolls yet. Create your first one.'));
                 return ListView.separated(
                   itemCount: rows.length,
@@ -516,7 +535,7 @@ class _ScrollsPageState extends State<ScrollsPage> {
                     final r = rows[i];
                     final fav = (r['is_favorite'] ?? false) as bool;
                     return Dismissible(
-                      key: Key(r['id'] as String),
+                      key: ValueKey(r['id'] as String),
                       direction: DismissDirection.endToStart,
                       background: Container(
                         color: Colors.red,
@@ -524,7 +543,7 @@ class _ScrollsPageState extends State<ScrollsPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: const Icon(Icons.delete, color: Colors.white),
                       ),
-                      onDismissed: (_) => _deleteWithUndo(r),
+                      confirmDismiss: (_) => _confirmDelete(r),
                       child: ListTile(
                         title: Text(r['title'] ?? ''),
                         subtitle: Text(
@@ -555,7 +574,7 @@ class _ScrollsPageState extends State<ScrollsPage> {
   }
 }
 
-/* --------------------------- DETAIL (MARKDOWN VIEW) --------------------------- */
+/* =========================== DETAIL (MARKDOWN) =========================== */
 
 class ScrollDetailPage extends StatelessWidget {
   final Map<String, dynamic> row;
@@ -572,7 +591,7 @@ class ScrollDetailPage extends StatelessWidget {
   }
 }
 
-/* --------------------------------- LINKS PAGE -------------------------------- */
+/* ================================ LINKS PAGE ================================ */
 
 const appLinks = {
   'TikTok': 'https://www.tiktok.com/@your_handle',
@@ -607,29 +626,25 @@ class LinksPage extends StatelessWidget {
   }
 }
 
-/* -------------------------------- ACCOUNT PAGE ------------------------------- */
+/* ================================ ACCOUNT PAGE ================================ */
 
 class AccountPage extends StatelessWidget {
   const AccountPage({super.key});
-
   @override
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Account', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Text('Email: ${user?.email ?? '-'}', style: const TextStyle(color: Colors.black54)),
-          const SizedBox(height: 24),
-          FilledButton.tonal(
-            onPressed: () async => Supabase.instance.client.auth.signOut(),
-            child: const Text('Sign out'),
-          ),
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Account', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Text('Email: ${user?.email ?? '-'}', style: const TextStyle(color: Colors.black54)),
+        const SizedBox(height: 24),
+        FilledButton.tonal(
+          onPressed: () async => Supabase.instance.client.auth.signOut(),
+          child: const Text('Sign out'),
+        ),
+      ]),
     );
   }
 }

@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Required for Supabase/network calls -->
+    <!-- Network permission for Supabase -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
@@ -22,7 +22,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Optional: keeps splash background until first frame -->
+            <!-- Optional splash/normal theme metadata -->
             <meta-data
                 android:name="io.flutter.embedding.android.SplashScreenDrawable"
                 android:resource="@drawable/launch_background" />

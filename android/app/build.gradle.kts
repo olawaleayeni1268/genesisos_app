@@ -1,6 +1,6 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
+    id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -13,9 +13,9 @@ android {
         minSdk = 21
         targetSdk = 34
 
-        // BUMPED so the new APK installs
-        versionCode = 14
-        versionName = "1.0.14"
+        // ↑ bump these anytime you need a new installable build
+        versionCode = 16
+        versionName = "1.0.16"
     }
 
     compileOptions {
@@ -28,7 +28,7 @@ android {
 
     buildTypes {
         getByName("release") {
-            // Use debug signing for easy install while testing
+            // debug signing so you can install easily during testing
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
         }
