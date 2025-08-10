@@ -1,21 +1,29 @@
+// android/settings.gradle.kts
+import org.gradle.api.initialization.resolve.RepositoriesMode
+
 pluginManagement {
     repositories {
+        // Order matters
         google()
         mavenCentral()
         gradlePluginPortal()
-        // Flutter engine/embedding artifacts live here
-        maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
     }
 }
 
+plugins {
+    // Flutter Gradle integration
+    id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+
+    // Pin plugin versions so Gradle can resolve them
+    id("com.android.application") version "8.7.3" apply false
+    id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+}
+
 dependencyResolutionManagement {
-    // Let settings repositories be used, but don’t hard-fail if a plugin adds one
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         google()
         mavenCentral()
-        // Same Flutter repo for runtime artifacts
-        maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
     }
 }
 
