@@ -1,4 +1,4 @@
-name: Android APK (no-secrets, dart-define, auto-version)
+name: Android APK (release artifact)
 
 on:
   push:
@@ -25,12 +25,13 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.32.8"
           cache: true
 
       - run: flutter pub get
       - run: flutter doctor -v || true
 
-      - name: Build release APK (hardcoded dart-defines)
+      - name: Build release APK (dart-define)
         run: |
           flutter build apk --release \
             --build-name="${VERSION_NAME}" \
@@ -46,7 +47,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: genesisos-apk
+          name: genesisos-apk-${{ env.VERSION_NAME }}
           path: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/flutter-apk/*-release.apk
