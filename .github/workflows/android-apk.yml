@@ -1,8 +1,8 @@
-name: Android APK (release artifact)
+name: Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -10,9 +10,8 @@ env:
   VERSION_CODE: ${{ github.run_number }}
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -31,7 +30,7 @@ jobs:
       - run: flutter pub get
       - run: flutter doctor -v || true
 
-      - name: Build release APK (dart-define)
+      - name: Build release APK
         run: |
           flutter build apk --release \
             --build-name="${VERSION_NAME}" \
@@ -39,17 +38,7 @@ jobs:
             --dart-define=SUPABASE_URL=https://pmxriyrzlkscisvgcjow.supabase.co \
             --dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBteHJpeXJ6bGtzY2lzdmdjam93Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM3MjQ0OTcsImV4cCI6MjA2OTMwMDQ5N30.qfNPGiFJQN-wi5oKVYzMjEdFbrDcD7RRP0-_merMuFM
 
-      - name: List outputs
-        run: |
-          echo "== OUTPUT TREE ==" && ls -R build/app/outputs || true
-          echo "== FLUTTER-APK ==" && ls -l build/app/outputs/flutter-apk || true
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: genesisos-apk-${{ env.VERSION_NAME }}
-          path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/flutter-apk/*-release.apk
-          if-no-files-found: error
-          retention-days: 14
+          name: apk-${{ env.VERSION_NAME }}
+          path: build/app/outputs/flutter-apk/app-release.apk
