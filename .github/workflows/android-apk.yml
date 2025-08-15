@@ -2,16 +2,15 @@ name: Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
-
-env:
-  VERSION_NAME: 1.0.${{ github.run_number }}
-  VERSION_CODE: ${{ github.run_number }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Build uses version from pubspec.yaml
+      JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
     steps:
       - uses: actions/checkout@v4
 
@@ -31,14 +30,14 @@ jobs:
       - run: flutter doctor -v || true
 
       - name: Build release APK
-        run: |
-          flutter build apk --release \
-            --build-name="${VERSION_NAME}" \
-            --build-number="${VERSION_CODE}" \
-            --dart-define=SUPABASE_URL=https://pmxriyrzlkscisvgcjow.supabase.co \
-            --dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBteHJpeXJ6bGtzY2lzdmdjam93Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM3MjQ0OTcsImV4cCI6MjA2OTMwMDQ5N30.qfNPGiFJQN-wi5oKVYzMjEdFbrDcD7RRP0-_merMuFM
+        run: flutter build apk --release
 
-      - uses: actions/upload-artifact@v4
+      - name: Show outputs
+        run: ls -R build/app/outputs || true
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: apk-${{ env.VERSION_NAME }}
+          name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
