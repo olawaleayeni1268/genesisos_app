@@ -8,9 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # Build uses version from pubspec.yaml
-      JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
     steps:
       - uses: actions/checkout@v4
 
@@ -27,17 +24,29 @@ jobs:
           cache: true
 
       - run: flutter pub get
-      - run: flutter doctor -v || true
 
+      # Build with Supabase values injected at compile time via repo secrets
       - name: Build release APK
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
 
-      - name: Show outputs
-        run: ls -R build/app/outputs || true
+      # Read version from the APK and create a clearly named copy
+      - name: Rename with version
+        shell: bash
+        run: |
+          FILE="build/app/outputs/flutter-apk/app-release.apk"
+          AAPT="$(ls -d $ANDROID_HOME/build-tools/* | sort -r | head -n1)/aapt"
+          VER="$($AAPT dump badging "$FILE" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
+          cp "$FILE" "build/app/outputs/flutter-apk/app-release-$VER.apk"
+          echo "Built version: $VER"
 
-      - name: Upload APK
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-release-*.apk
           if-no-files-found: error
