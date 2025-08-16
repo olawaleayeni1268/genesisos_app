@@ -1,6 +1,5 @@
 // lib/main.dart
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'env.dart';
@@ -8,13 +7,14 @@ import 'env.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ---- Supabase init (no persistSession; it's automatic in 2.8+) ----
+  // Supabase init — use FlutterAuthClientOptions (not AuthClientOptions)
   await Supabase.initialize(
     url: Env.supabaseUrl,
     anonKey: Env.supabaseAnonKey,
-    authOptions: const AuthClientOptions(
+    authOptions: const FlutterAuthClientOptions(
       autoRefreshToken: true,
-      // For web builds you can add: authFlowType: AuthFlowType.pkce,
+      // persistSession is automatic in 2.8+; no need to set it
+      // For web you could also set: authFlowType: AuthFlowType.pkce,
     ),
   );
 
@@ -23,14 +23,12 @@ Future<void> main() async {
 
 class GenesisApp extends StatefulWidget {
   const GenesisApp({super.key});
-
   @override
   State<GenesisApp> createState() => _GenesisAppState();
 }
 
 class _GenesisAppState extends State<GenesisApp> {
   ThemeMode _mode = ThemeMode.system;
-
   void _toggleTheme() {
     setState(() {
       _mode = _mode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
@@ -62,7 +60,6 @@ class _GenesisAppState extends State<GenesisApp> {
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key, required this.onToggleTheme});
   final VoidCallback onToggleTheme;
-
   @override
   State<AuthGate> createState() => _AuthGateState();
 }
@@ -102,7 +99,6 @@ class _AuthGateState extends State<AuthGate> {
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.onToggleTheme});
   final VoidCallback onToggleTheme;
-
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
@@ -131,9 +127,8 @@ class _LoginPageState extends State<LoginPage> {
         password: _password.text,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Signed in ✅')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Signed in ✅')));
     } on AuthException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
@@ -155,9 +150,7 @@ class _LoginPageState extends State<LoginPage> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('Sign-up email sent (check inbox / spam) ✉️')),
+        const SnackBar(content: Text('Sign-up email sent ✉️')),
       );
     } on AuthException catch (e) {
       setState(() => _error = e.message);
@@ -174,7 +167,6 @@ class _LoginPageState extends State<LoginPage> {
     try {
       await Supabase.instance.client.auth.resetPasswordForEmail(
         _email.text.trim(),
-        // For mobile you can omit redirectTo; for web you’d use your site URL
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -232,15 +224,20 @@ class _LoginPageState extends State<LoginPage> {
           const SizedBox(height: 12),
           FilledButton(
             onPressed: _busy ? null : _signIn,
-            child:
-                _busy ? const CircularProgressIndicator() : const Text('Sign in'),
+            child: _busy
+                ? const CircularProgressIndicator()
+                : const Text('Sign in'),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              TextButton(onPressed: _busy ? null : _signUp, child: const Text('Create account')),
+              TextButton(
+                  onPressed: _busy ? null : _signUp,
+                  child: const Text('Create account')),
               const SizedBox(width: 12),
-              TextButton(onPressed: _busy ? null : _resetPassword, child: const Text('Forgot password')),
+              TextButton(
+                  onPressed: _busy ? null : _resetPassword,
+                  child: const Text('Forgot password')),
             ],
           ),
         ],
@@ -256,7 +253,6 @@ enum ScrollSort { dateDesc, titleAsc, favoritesFirst }
 class ScrollsPage extends StatefulWidget {
   const ScrollsPage({super.key, required this.onToggleTheme});
   final VoidCallback onToggleTheme;
-
   @override
   State<ScrollsPage> createState() => _ScrollsPageState();
 }
@@ -296,9 +292,8 @@ class _ScrollsPageState extends State<ScrollsPage> {
       _title.clear();
       _content.clear();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Saved ✅')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Saved ✅')));
     } on PostgrestException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -323,9 +318,7 @@ class _ScrollsPageState extends State<ScrollsPage> {
   Future<bool> _deleteWithUndo(Map<String, dynamic> row) async {
     final id = row['id'] as String;
     try {
-      // Delete first (stream will drop it), but offer undo.
       await Supabase.instance.client.from('scrolls').delete().eq('id', id);
-
       if (!mounted) return true;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -334,7 +327,7 @@ class _ScrollsPageState extends State<ScrollsPage> {
             label: 'Undo',
             onPressed: () async {
               final data = Map<String, dynamic>.from(row);
-              data.remove('id'); // let DB reassign id on reinsert
+              data.remove('id'); // let DB assign a new id
               try {
                 await Supabase.instance.client.from('scrolls').insert(data);
               } catch (e) {
@@ -360,32 +353,29 @@ class _ScrollsPageState extends State<ScrollsPage> {
 
   Stream<List<Map<String, dynamic>>> _streamScrolls() {
     final user = Supabase.instance.client.auth.currentUser!;
-    final query = Supabase.instance.client
+    return Supabase.instance.client
         .from('scrolls')
         .stream(primaryKey: ['id'])
         .eq('user_id', user.id);
-    // Sorting is applied in-memory below so the undo behavior is smoother.
-    return query;
   }
 
   List<Map<String, dynamic>> _applySort(List<Map<String, dynamic>> rows) {
     final list = List<Map<String, dynamic>>.from(rows);
     switch (_sort) {
       case ScrollSort.dateDesc:
-        list.sort((a, b) =>
-            DateTime.parse(b['created_at'] as String)
-                .compareTo(DateTime.parse(a['created_at'] as String)));
+        list.sort((a, b) => DateTime.parse(b['created_at'] as String)
+            .compareTo(DateTime.parse(a['created_at'] as String)));
         break;
       case ScrollSort.titleAsc:
-        list.sort((a, b) =>
-            (a['title'] as String).toLowerCase().compareTo((b['title'] as String).toLowerCase()));
+        list.sort((a, b) => (a['title'] as String)
+            .toLowerCase()
+            .compareTo((b['title'] as String).toLowerCase()));
         break;
       case ScrollSort.favoritesFirst:
         list.sort((a, b) {
           final fa = (a['is_favorite'] as bool?) ?? false;
           final fb = (b['is_favorite'] as bool?) ?? false;
           if (fa == fb) {
-            // secondary sort by date desc
             return DateTime.parse(b['created_at'] as String)
                 .compareTo(DateTime.parse(a['created_at'] as String));
           }
@@ -422,8 +412,10 @@ class _ScrollsPageState extends State<ScrollsPage> {
           children: [
             TextField(
               controller: _title,
-              decoration:
-                  const InputDecoration(labelText: 'Title', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Title',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 8),
             TextField(
@@ -442,7 +434,10 @@ class _ScrollsPageState extends State<ScrollsPage> {
                   onPressed: _saving ? null : _save,
                   child: _saving
                       ? const SizedBox(
-                          width: 20, height: 20, child: CircularProgressIndicator())
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(),
+                        )
                       : const Text('Save scroll'),
                 ),
                 const Spacer(),
@@ -482,7 +477,8 @@ class _ScrollsPageState extends State<ScrollsPage> {
                   final rows = _applySort(snap.data!);
                   if (rows.isEmpty) {
                     return const Center(
-                        child: Text('No scrolls yet. Create your first one.'));
+                      child: Text('No scrolls yet. Create your first one.'),
+                    );
                   }
                   return ListView.separated(
                     itemCount: rows.length,
@@ -499,8 +495,10 @@ class _ScrollsPageState extends State<ScrollsPage> {
                         background: Container(
                           color: Colors.red,
                           alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: const Icon(Icons.delete, color: Colors.white),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 20),
+                          child:
+                              const Icon(Icons.delete, color: Colors.white),
                         ),
                         direction: DismissDirection.endToStart,
                         confirmDismiss: (_) => _deleteWithUndo(row),
@@ -512,7 +510,8 @@ class _ScrollsPageState extends State<ScrollsPage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           trailing: IconButton(
-                            icon: Icon(fav ? Icons.star : Icons.star_border),
+                            icon: Icon(
+                                fav ? Icons.star : Icons.star_border),
                             onPressed: () => _toggleFavorite(id, fav),
                           ),
                         ),
