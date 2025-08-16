@@ -1,7 +1,7 @@
 name: genesisos_app
 description: GenesisOS Flutter app (Supabase + dotenv)
 publish_to: "none"
-version: 1.0.206+206
+version: 1.0.214+214
 
 environment:
   sdk: ">=3.3.0 <4.0.0"

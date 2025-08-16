@@ -25,14 +25,28 @@ jobs:
 
       - run: flutter pub get
 
-      # Build with Supabase values injected at compile time via repo secrets
+      # Recreate signing files from secrets (if provided)
+      - name: Restore signing files
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        shell: bash
+        run: |
+          mkdir -p android/app
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
+          cat > android/key.properties <<'EOF'
+          storeFile=app/upload-keystore.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          EOF
+
+      # Build with Supabase values injected at compile time
       - name: Build release APK
         run: |
           flutter build apk --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
 
-      # Read version from the APK and create a clearly named copy
+      # Rename with version for clarity
       - name: Rename with version
         shell: bash
         run: |
