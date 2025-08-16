@@ -5,9 +5,19 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# Use official CDNs and sane defaults so the build doesn't hang
+env:
+  FLUTTER_STORAGE_BASE_URL: https://storage.googleapis.com
+  PUB_HOSTED_URL: https://pub.dev
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  GRADLE_OPTS: -Dorg.gradle.daemon=true -Dorg.gradle.parallel=true -Dkotlin.daemon.jvm.options=-Xmx2g
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,13 +33,27 @@ jobs:
           flutter-version: "3.32.8"
           cache: true
 
+      # Accept Android licenses to avoid interactive stalls
+      - name: Accept Android licenses
+        shell: bash
+        run: |
+          set -euxo pipefail
+          yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          # Fallback path on some runners:
+          if [ -x "${ANDROID_HOME}/tools/bin/sdkmanager" ]; then
+            yes | "${ANDROID_HOME}/tools/bin/sdkmanager" --licenses || true
+          fi
+
+      - run: flutter --version
       - run: flutter pub get
 
-      # Recreate signing files from secrets (if provided)
+      # DO NOT delete/recreate android/ anymore (that was causing long/networky runs)
+      # Restore signing files if secrets are present
       - name: Restore signing files
         if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         shell: bash
         run: |
+          set -euxo pipefail
           mkdir -p android/app
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
           cat > android/key.properties <<'EOF'
@@ -39,22 +63,24 @@ jobs:
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           EOF
 
-      # Build with Supabase values injected at compile time
+      # Build with your Supabase values
       - name: Build release APK
         run: |
           flutter build apk --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
 
-      # Rename with version for clarity
+      # Rename with version for clarity (optional)
       - name: Rename with version
         shell: bash
         run: |
+          set -euxo pipefail
           FILE="build/app/outputs/flutter-apk/app-release.apk"
-          AAPT="$(ls -d $ANDROID_HOME/build-tools/* | sort -r | head -n1)/aapt"
-          VER="$($AAPT dump badging "$FILE" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
-          cp "$FILE" "build/app/outputs/flutter-apk/app-release-$VER.apk"
-          echo "Built version: $VER"
+          AAPT="$(ls -d $ANDROID_HOME/build-tools/* | sort -r | head -n1)/aapt" || true
+          if [ -x "$AAPT" ]; then
+            VER="$($AAPT dump badging "$FILE" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
+            cp "$FILE" "build/app/outputs/flutter-apk/app-release-${VER:-unknown}.apk"
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
