@@ -6,10 +6,10 @@ on:
     branches: [ main ]
 
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-latest
 
-    # Make secrets available to the build step
+    # Make secrets available to the build command
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -17,38 +17,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up Flutter
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.32.8'
+          cache: true
 
       - name: Flutter pub get
         run: flutter pub get
 
-      # Optional: only if you added signing secrets; harmless if you didn’t.
-      - name: Restore keystore (optional)
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      # (Optional) quick sanity check without printing your secrets
+      - name: Check secret lengths
+        shell: bash
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
-          cat > android/key.properties <<'EOF'
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          storeFile=upload-keystore.jks
-          EOF
+          echo "URL LEN: ${#SUPABASE_URL}"
+          echo "KEY LEN: ${#SUPABASE_ANON_KEY}"
 
-      - name: Build release APK (inject Supabase defines)
+      - name: Build release APK with dart-define
+        shell: bash
         run: |
           flutter build apk --release \
-            --build-name=${{ github.run_number }} \
-            --build-number=${{ github.run_number }} \
-            --dart-define=SUPABASE_URL="${SUPABASE_URL}" \
-            --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY}"
+            --build-name="$GITHUB_RUN_NUMBER" \
+            --build-number="$GITHUB_RUN_NUMBER" \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
+          name: app-release.apk
           path: build/app/outputs/flutter-apk/app-release.apk
