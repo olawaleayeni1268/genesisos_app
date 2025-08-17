@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'env.dart';
 
-/// A minimal, safe entry that:
-/// - Initializes Supabase using values injected via --dart-define (CI secrets)
-/// - Shows a simple auth gate: Sign in / Create account / Sign out
-/// - Persists the session across app restarts (FlutterAuthClientOptions)
+/// Minimal, safe entry:
+/// - Initializes Supabase with values injected via --dart-define (CI secrets)
+/// - Simple auth flow (Sign in / Create account / Sign out)
+/// - Correct options for supabase_flutter 2.9.x (no `persistSession` here)
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,15 +13,17 @@ Future<void> main() async {
   await Supabase.initialize(
     url: Env.supabaseUrl,
     anonKey: Env.supabaseAnonKey,
+    // IMPORTANT: Use FlutterAuthClientOptions (supabase_flutter 2.9.x).
+    // Do NOT include `persistSession` here — persistence is handled for you.
     authOptions: const FlutterAuthClientOptions(
-      persistSession: true,
       autoRefreshToken: true,
+      detectSessionInUri: true,
+      // localStorage: FlutterSecureLocalStorage(), // default is fine
     ),
   );
 
-  // Simple visibility check in logs (won't print your key)
-  // If this prints empty at runtime, your APK was built without the defines.
-  // Re-check your GitHub Secrets and workflow step.
+  // Quick sanity print (won't expose your key). If empty at runtime,
+  // your APK was built without --dart-define (check GitHub Secrets/workflow).
   // ignore: avoid_print
   print('SUPABASE_URL at runtime: "${Env.supabaseUrl}"');
 
@@ -81,7 +83,7 @@ class _AuthGateState extends State<AuthGate> {
       return _BuildProblem(
         title: 'Missing Supabase config',
         message:
-            'Your build does not contain SUPABASE_URL / SUPABASE_ANON_KEY.\n\n'
+            'This build does not contain SUPABASE_URL / SUPABASE_ANON_KEY.\n\n'
             'If this is a release APK from GitHub Actions, set the two repo '
             'secrets and ensure the workflow passes them via --dart-define.',
         details: Env.supabaseUrl.isEmpty
@@ -316,17 +318,22 @@ class _BuildProblem extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(title,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          )),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                       const SizedBox(height: 8),
                       Text(message, textAlign: TextAlign.center),
                       const SizedBox(height: 8),
-                      Text(details,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.grey)),
+                      Text(
+                        details,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.grey),
+                      ),
                     ],
                   ),
                 ),
