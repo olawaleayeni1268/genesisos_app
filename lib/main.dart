@@ -1,113 +1,115 @@
-// lib/main.dart
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'env.dart';
 
+/// A minimal, safe entry that:
+/// - Initializes Supabase using values injected via --dart-define (CI secrets)
+/// - Shows a simple auth gate: Sign in / Create account / Sign out
+/// - Persists the session across app restarts (FlutterAuthClientOptions)
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Supabase init — use FlutterAuthClientOptions (not AuthClientOptions)
   await Supabase.initialize(
     url: Env.supabaseUrl,
     anonKey: Env.supabaseAnonKey,
     authOptions: const FlutterAuthClientOptions(
+      persistSession: true,
       autoRefreshToken: true,
-      // persistSession is automatic in 2.8+; no need to set it
-      // For web you could also set: authFlowType: AuthFlowType.pkce,
     ),
   );
+
+  // Simple visibility check in logs (won't print your key)
+  // If this prints empty at runtime, your APK was built without the defines.
+  // Re-check your GitHub Secrets and workflow step.
+  // ignore: avoid_print
+  print('SUPABASE_URL at runtime: "${Env.supabaseUrl}"');
 
   runApp(const GenesisApp());
 }
 
-class GenesisApp extends StatefulWidget {
+class GenesisApp extends StatelessWidget {
   const GenesisApp({super.key});
-  @override
-  State<GenesisApp> createState() => _GenesisAppState();
-}
-
-class _GenesisAppState extends State<GenesisApp> {
-  ThemeMode _mode = ThemeMode.system;
-  void _toggleTheme() {
-    setState(() {
-      _mode = _mode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'GenesisOS',
-      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorSchemeSeed: Colors.indigo,
-        brightness: Brightness.light,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
-        colorSchemeSeed: Colors.indigo,
-        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.indigo,
+          brightness: Brightness.dark,
+        ),
         useMaterial3: true,
       ),
-      themeMode: _mode,
-      home: AuthGate(onToggleTheme: _toggleTheme),
+      themeMode: ThemeMode.system,
+      home: const AuthGate(),
     );
   }
 }
 
-/// Watches Supabase auth state and shows Login or App.
 class AuthGate extends StatefulWidget {
-  const AuthGate({super.key, required this.onToggleTheme});
-  final VoidCallback onToggleTheme;
+  const AuthGate({super.key});
+
   @override
   State<AuthGate> createState() => _AuthGateState();
 }
 
 class _AuthGateState extends State<AuthGate> {
-  late final StreamSubscription<AuthState> _sub;
-  Session? _session = Supabase.instance.client.auth.currentSession;
+  Session? _session;
+  late final Stream<AuthState> _authStream;
+  late final SupabaseClient _supabase;
 
   @override
   void initState() {
     super.initState();
-    _sub = Supabase.instance.client.auth.onAuthStateChange.listen((event) {
-      setState(() {
-        _session = event.session;
-      });
+    _supabase = Supabase.instance.client;
+    _session = _supabase.auth.currentSession;
+    _authStream = _supabase.auth.onAuthStateChange;
+    _authStream.listen((authState) {
+      setState(() => _session = authState.session);
     });
   }
 
   @override
-  void dispose() {
-    _sub.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final session = _session ?? Supabase.instance.client.auth.currentSession;
-    if (session == null) {
-      return LoginPage(onToggleTheme: widget.onToggleTheme);
+    if (Env.supabaseUrl.isEmpty || Env.supabaseAnonKey.isEmpty) {
+      return _BuildProblem(
+        title: 'Missing Supabase config',
+        message:
+            'Your build does not contain SUPABASE_URL / SUPABASE_ANON_KEY.\n\n'
+            'If this is a release APK from GitHub Actions, set the two repo '
+            'secrets and ensure the workflow passes them via --dart-define.',
+        details: Env.supabaseUrl.isEmpty
+            ? 'SUPABASE_URL was empty at runtime.'
+            : 'SUPABASE_ANON_KEY was empty at runtime.',
+      );
     }
-    return ScrollsPage(onToggleTheme: widget.onToggleTheme);
+
+    if (_session == null) {
+      return const SignInPage();
+    }
+    return const HomePage();
   }
 }
 
-// --------------------------- Login Page ---------------------------
+class SignInPage extends StatefulWidget {
+  const SignInPage({super.key});
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key, required this.onToggleTheme});
-  final VoidCallback onToggleTheme;
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<SignInPage> createState() => _SignInPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _SignInPageState extends State<SignInPage> {
   final _email = TextEditingController();
   final _password = TextEditingController();
-  bool _busy = false;
-  String? _error;
+  bool _loading = false;
+
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   @override
   void dispose() {
@@ -117,411 +119,220 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _signIn() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    if (_email.text.isEmpty || _password.text.isEmpty) {
+      _snack('Enter email and password');
+      return;
+    }
+    setState(() => _loading = true);
     try {
-      await Supabase.instance.client.auth.signInWithPassword(
+      await _supabase.auth.signInWithPassword(
         email: _email.text.trim(),
         password: _password.text,
       );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Signed in ✅')));
+      // AuthGate will rebuild from the auth stream
     } on AuthException catch (e) {
-      setState(() => _error = e.message);
+      _snack(e.message);
     } catch (e) {
-      setState(() => _error = 'Unexpected error: $e');
+      _snack('Sign in error: $e');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _signUp() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    if (_email.text.isEmpty || _password.text.isEmpty) {
+      _snack('Enter email and password');
+      return;
+    }
+    setState(() => _loading = true);
     try {
-      await Supabase.instance.client.auth.signUp(
+      await _supabase.auth.signUp(
         email: _email.text.trim(),
         password: _password.text,
       );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign-up email sent ✉️')),
-      );
+      _snack('Account created. You are now signed in.');
     } on AuthException catch (e) {
-      setState(() => _error = e.message);
+      _snack(e.message);
+    } catch (e) {
+      _snack('Sign up error: $e');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _resetPassword() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await Supabase.instance.client.auth.resetPasswordForEmail(
-        _email.text.trim(),
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password reset email sent ✉️')),
-      );
-    } on AuthException catch (e) {
-      setState(() => _error = e.message);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final url = Env.supabaseUrl;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('GenesisOS • Sign in'),
-        actions: [
-          IconButton(
-            tooltip: 'Toggle theme',
-            onPressed: widget.onToggleTheme,
-            icon: const Icon(Icons.brightness_6),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(
-            'Supabase URL -> $url',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _email,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Email',
-              border: OutlineInputBorder(),
+      appBar: AppBar(title: const Text('GenesisOS — Sign in')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: AutofillGroup(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Connect to Supabase',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    Env.supabaseUrl,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [AutofillHints.username, AutofillHints.email],
+                    decoration: const InputDecoration(labelText: 'Email'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _password,
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.password],
+                    decoration: const InputDecoration(labelText: 'Password'),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: _loading ? null : _signIn,
+                    child: _loading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Sign in'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _loading ? null : _signUp,
+                    child: const Text('Create account'),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _password,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Password',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (_error != null)
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _busy ? null : _signIn,
-            child: _busy
-                ? const CircularProgressIndicator()
-                : const Text('Sign in'),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              TextButton(
-                  onPressed: _busy ? null : _signUp,
-                  child: const Text('Create account')),
-              const SizedBox(width: 12),
-              TextButton(
-                  onPressed: _busy ? null : _resetPassword,
-                  child: const Text('Forgot password')),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-// --------------------------- Scrolls Page ---------------------------
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
 
-enum ScrollSort { dateDesc, titleAsc, favoritesFirst }
-
-class ScrollsPage extends StatefulWidget {
-  const ScrollsPage({super.key, required this.onToggleTheme});
-  final VoidCallback onToggleTheme;
-  @override
-  State<ScrollsPage> createState() => _ScrollsPageState();
-}
-
-class _ScrollsPageState extends State<ScrollsPage> {
-  final _title = TextEditingController();
-  final _content = TextEditingController();
-  bool _saving = false;
-  ScrollSort _sort = ScrollSort.dateDesc;
-
-  @override
-  void dispose() {
-    _title.dispose();
-    _content.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final title = _title.text.trim();
-    final content = _content.text.trim();
-    if (title.isEmpty || content.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Title and content are required.')),
-      );
-      return;
-    }
-
-    setState(() => _saving = true);
-    try {
-      final user = Supabase.instance.client.auth.currentUser!;
-      await Supabase.instance.client.from('scrolls').insert({
-        'user_id': user.id,
-        'title': title,
-        'content': content,
-        'is_favorite': false,
-      });
-      _title.clear();
-      _content.clear();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Saved ✅')));
-    } on PostgrestException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.message)));
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _toggleFavorite(String id, bool current) async {
-    try {
-      await Supabase.instance.client
-          .from('scrolls')
-          .update({'is_favorite': !current}).eq('id', id);
-    } on PostgrestException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Fav error: ${e.message}')));
-    }
-  }
-
-  Future<bool> _deleteWithUndo(Map<String, dynamic> row) async {
-    final id = row['id'] as String;
-    try {
-      await Supabase.instance.client.from('scrolls').delete().eq('id', id);
-      if (!mounted) return true;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Deleted'),
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () async {
-              final data = Map<String, dynamic>.from(row);
-              data.remove('id'); // let DB assign a new id
-              try {
-                await Supabase.instance.client.from('scrolls').insert(data);
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Undo failed: $e')),
-                );
-              }
-            },
-          ),
-        ),
-      );
-      return true;
-    } on PostgrestException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Delete error: ${e.message}')),
-        );
-      }
-      return false;
-    }
-  }
-
-  Stream<List<Map<String, dynamic>>> _streamScrolls() {
-    final user = Supabase.instance.client.auth.currentUser!;
-    return Supabase.instance.client
-        .from('scrolls')
-        .stream(primaryKey: ['id'])
-        .eq('user_id', user.id);
-  }
-
-  List<Map<String, dynamic>> _applySort(List<Map<String, dynamic>> rows) {
-    final list = List<Map<String, dynamic>>.from(rows);
-    switch (_sort) {
-      case ScrollSort.dateDesc:
-        list.sort((a, b) => DateTime.parse(b['created_at'] as String)
-            .compareTo(DateTime.parse(a['created_at'] as String)));
-        break;
-      case ScrollSort.titleAsc:
-        list.sort((a, b) => (a['title'] as String)
-            .toLowerCase()
-            .compareTo((b['title'] as String).toLowerCase()));
-        break;
-      case ScrollSort.favoritesFirst:
-        list.sort((a, b) {
-          final fa = (a['is_favorite'] as bool?) ?? false;
-          final fb = (b['is_favorite'] as bool?) ?? false;
-          if (fa == fb) {
-            return DateTime.parse(b['created_at'] as String)
-                .compareTo(DateTime.parse(a['created_at'] as String));
-          }
-          return fb ? 1 : -1; // true first
-        });
-        break;
-    }
-    return list;
-  }
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   @override
   Widget build(BuildContext context) {
+    final user = _supabase.auth.currentUser;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('GenesisOS • Scrolls'),
+        title: const Text('GenesisOS — Home'),
         actions: [
-          IconButton(
-            tooltip: 'Toggle theme',
-            onPressed: widget.onToggleTheme,
-            icon: const Icon(Icons.brightness_6),
-          ),
           IconButton(
             tooltip: 'Sign out',
             onPressed: () async {
-              await Supabase.instance.client.auth.signOut();
+              await _supabase.auth.signOut();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(const SnackBar(content: Text('Signed out')));
+              }
             },
             icon: const Icon(Icons.logout),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: _title,
-              decoration: const InputDecoration(
-                labelText: 'Title',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _content,
-              minLines: 3,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                labelText: 'Content (Markdown supported later)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(),
-                        )
-                      : const Text('Save scroll'),
+                const Icon(Icons.verified, size: 48),
+                const SizedBox(height: 12),
+                const Text(
+                  'Supabase ready ✅',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                 ),
-                const Spacer(),
-                PopupMenuButton<ScrollSort>(
-                  initialValue: _sort,
-                  onSelected: (v) => setState(() => _sort = v),
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: ScrollSort.dateDesc,
-                      child: Text('Sort: Date (newest)'),
-                    ),
-                    PopupMenuItem(
-                      value: ScrollSort.titleAsc,
-                      child: Text('Sort: Title (A–Z)'),
-                    ),
-                    PopupMenuItem(
-                      value: ScrollSort.favoritesFirst,
-                      child: Text('Sort: Favorites first'),
-                    ),
-                  ],
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Icon(Icons.sort),
-                  ),
+                const SizedBox(height: 6),
+                Text(
+                  user != null ? 'You are signed in as ${user.email}' : 'No session',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                SelectableText(
+                  'URL: ${Env.supabaseUrl}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            const Divider(),
-            Expanded(
-              child: StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _streamScrolls(),
-                builder: (context, snap) {
-                  if (!snap.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final rows = _applySort(snap.data!);
-                  if (rows.isEmpty) {
-                    return const Center(
-                      child: Text('No scrolls yet. Create your first one.'),
-                    );
-                  }
-                  return ListView.separated(
-                    itemCount: rows.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final row = rows[index];
-                      final id = row['id'] as String;
-                      final title = (row['title'] as String?) ?? '';
-                      final content = (row['content'] as String?) ?? '';
-                      final fav = (row['is_favorite'] as bool?) ?? false;
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-                      return Dismissible(
-                        key: ValueKey(id),
-                        background: Container(
-                          color: Colors.red,
-                          alignment: Alignment.centerRight,
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 20),
-                          child:
-                              const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        direction: DismissDirection.endToStart,
-                        confirmDismiss: (_) => _deleteWithUndo(row),
-                        child: ListTile(
-                          title: Text(title),
-                          subtitle: Text(
-                            content,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: IconButton(
-                            icon: Icon(
-                                fav ? Icons.star : Icons.star_border),
-                            onPressed: () => _toggleFavorite(id, fav),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
+class _BuildProblem extends StatelessWidget {
+  const _BuildProblem({
+    required this.title,
+    required this.message,
+    required this.details,
+  });
+
+  final String title;
+  final String message;
+  final String details;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('GenesisOS — Config issue')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Card(
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: DefaultTextStyle.merge(
+                  style: const TextStyle(fontSize: 14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(title,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          )),
+                      const SizedBox(height: 8),
+                      Text(message, textAlign: TextAlign.center),
+                      const SizedBox(height: 8),
+                      Text(details,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
